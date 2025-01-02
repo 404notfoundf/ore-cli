@@ -44,6 +44,7 @@ pub enum ComputeBudget {
 }
 
 impl Miner {
+    // todo?? 发送交易
     pub async fn send_and_confirm(
         &self,
         ixs: &[Instruction],
@@ -83,6 +84,10 @@ impl Miner {
         if jito_tip > 0 {
             send_client = self.jito_client.clone();
         }
+
+        /**
+            ?? 如果有小费, 调用的就是jto的rpc
+        */
         if jito_tip > 0 {
             let tip_accounts = [
                 "96gYZGLnJYVFmbjzopPSU6QiEV5fGqZNyN9nmNhvrZU5",

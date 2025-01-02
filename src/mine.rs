@@ -74,10 +74,12 @@ impl Miner {
         loop {
             // Fetch proof
             let config = get_config(&self.rpc_client).await;
+            // todo 获取job?? -> 与矿工绑定的proof账号
             let proof =
                 get_updated_proof_with_authority(&self.rpc_client, signer.pubkey(), last_hash_at)
                     .await;
 
+            println!("proof: {:?}", proof);
             // Print unclaimed balance
             println!(
                 "\n\nBalance: {} ORE{}",
@@ -103,6 +105,7 @@ impl Miner {
             let cutoff_time = self.get_cutoff(proof.last_hash_at, args.buffer_time).await;
 
             // Build nonce indices
+            // 生成唯一的nonce索引
             let mut nonce_indices = Vec::with_capacity(args.cores as usize);
             for n in 0..(args.cores) {
                 let nonce = u64::MAX.saturating_div(args.cores).saturating_mul(n);
@@ -138,6 +141,10 @@ impl Miner {
             optional_accounts = [optional_accounts, BoostData::to_vec(&boost_data_2)].concat();
             optional_accounts = [optional_accounts, BoostData::to_vec(&boost_data_3)].concat();
             // Build mine ix
+
+            /**
+                ?? 构建instruction参数, 此处包含向哪个地址发
+            */
             let ix = ore_api::sdk::mine(
                 signer.pubkey(),
                 signer.pubkey(),
@@ -145,9 +152,16 @@ impl Miner {
                 solution,
                 optional_accounts,
             );
+
+            /**
+                ixs看成是一系列指令的集合
+            */
             ixs.push(ix);
 
-            // Submit transaction
+            // Submit transactions
+            /**
+                从而发送交易
+            */
             self.send_and_confirm(&ixs, ComputeBudget::Fixed(compute_budget), false)
                 .await
                 .ok();
@@ -208,9 +222,12 @@ impl Miner {
             if member_challenge.device_id.gt(&member_challenge.num_devices) {
                 return Err(Error::TooManyDevices);
             }
+
             let device_id = member_challenge.device_id.saturating_sub(1) as u64;
+
             let left_bound =
                 u64_unit.saturating_mul(nonce_index) + device_id.saturating_mul(nonce_unit);
+
             // Split nonce-device space for muliple cores
             let range_per_core = nonce_unit.saturating_div(args.cores);
             let mut nonce_indices = Vec::with_capacity(args.cores as usize);
@@ -273,6 +290,7 @@ impl Miner {
         }
     }
 
+
     async fn find_hash_par(
         challenge: [u8; 32],
         cutoff_time: u64,
@@ -289,6 +307,7 @@ impl Miner {
         let core_ids = core_ids.into_iter().filter(|id| id.id < (cores as usize));
         let handles: Vec<_> = core_ids
             .map(|i| {
+
                 let global_best_difficulty = Arc::clone(&global_best_difficulty);
                 std::thread::spawn({
                     let progress_bar = progress_bar.clone();
@@ -316,6 +335,9 @@ impl Miner {
                             // Look for best difficulty score in all hashes
                             for hx in hxs {
                                 let difficulty = hx.difficulty();
+                                /**
+                                    难度越高越好
+                                */
                                 if difficulty.gt(&best_difficulty) {
                                     best_nonce = nonce;
                                     best_difficulty = difficulty;
@@ -325,6 +347,9 @@ impl Miner {
                                         // Update best global difficulty
                                         *global_best_difficulty.write().unwrap() = best_difficulty;
 
+                                        /**
+                                            ? 提交自己的解到pool矿池端
+                                        */
                                         // Continuously upload best solution to pool
                                         if difficulty.ge(&min_difficulty) {
                                             if let Some(ref ch) = pool_channel {
@@ -485,6 +510,11 @@ async fn fetch_boost_data(
     let Some(mint_address) = mint_address else {
         return None;
     };
+
+    /**
+        ? 获取stake有关参数
+    */
+
     let mint_address = Pubkey::from_str(&mint_address).unwrap();
     let boost_address = boost_pda(mint_address).0;
     let stake_address = stake_pda(authority, boost_address).0;

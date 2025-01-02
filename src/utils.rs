@@ -7,6 +7,7 @@ use ore_api::{
     },
     state::{Config, Proof, Treasury},
 };
+
 use ore_boost_api::state::{Boost, Stake};
 use serde::Deserialize;
 use solana_client::client_error::{ClientError, ClientErrorKind};
